@@ -31,13 +31,9 @@ class Client
         'password' => '',
         'client_id' => '',
         'keep_alive' => 0,
-        'protocol_name' => 'MQTT',
-        'protocol_level' => 4,
-        'properties' => [
-            'session_expiry_interval' => 0,
-            'receive_maximum' => 0,
-            'topic_alias_maximum' => 0,
-        ],
+        'protocol_name' => ProtocolInterface::MQTT_PROTOCOL_NAME,
+        'protocol_level' => ProtocolInterface::MQTT_PROTOCOL_LEVEL_3_1_1,
+        'properties' => [],
     ];
 
     private $messageId = 0;
@@ -76,11 +72,7 @@ class Client
             'clean_session' => $clean ? 0 : 1,
             'client_id' => $this->config['client_id'],
             'keep_alive' => $this->config['keep_alive'],
-            'properties' => [
-                'session_expiry_interval' => $this->config['properties']['session_expiry_interval'],
-                'receive_maximum' => $this->config['properties']['receive_maximum'],
-                'topic_alias_maximum' => $this->config['properties']['topic_alias_maximum'],
-            ],
+            'properties' => $this->config['properties'],
             'user_name' => $this->config['user_name'],
             'password' => $this->config['password'],
         ];
@@ -93,42 +85,44 @@ class Client
         return $this->send($data);
     }
 
-    public function subscribe(array $topics)
+    public function subscribe(array $topics, array $properties = [])
     {
         $data = [
             'type' => Types::SUBSCRIBE,
             'message_id' => $this->buildMessageId(),
+            'properties' => $properties,
             'topics' => $topics,
         ];
 
         return $this->send($data);
     }
 
-    public function unSubscribe(array $topics)
+    public function unSubscribe(array $topics, array $properties = [])
     {
         $data = [
             'type' => Types::UNSUBSCRIBE,
             'message_id' => $this->buildMessageId(),
+            'properties' => $properties,
             'topics' => $topics,
         ];
 
         return $this->send($data);
     }
 
-    public function publish($topic, $content, $qos = 0, $dup = 0, $retain = 0, array $properties = [])
+    public function publish($topic, $message, $qos = 0, $dup = 0, $retain = 0, array $properties = [])
     {
         $response = ($qos > 0) ? true : false;
 
         return $this->send(
             [
                 'type' => Types::PUBLISH,
-                'message_id' => $this->buildMessageId(),
-                'topic' => $topic,
-                'message' => $content,
                 'qos' => $qos,
                 'dup' => $dup,
                 'retain' => $retain,
+                'topic' => $topic,
+                'message_id' => $this->buildMessageId(),
                 'properties' => $properties,
+                'message' => $message,
             ],
             $response
         );
@@ -139,11 +133,16 @@ class Client
         return $this->send(['type' => Types::PINGREQ]);
     }
 
-    public function close(int $code = ReasonCode::NORMAL_DISCONNECTION)
+    public function close(int $code = ReasonCode::NORMAL_DISCONNECTION, array $properties = [])
     {
-        $this->send(['type' => Types::DISCONNECT, 'code' => $code], false);
+        $this->send(['type' => Types::DISCONNECT, 'code' => $code, 'properties' => $properties], false);
 
         return $this->client->close();
+    }
+
+    public function auth(int $code = ReasonCode::SUCCESS, array $properties = [])
+    {
+        return $this->send(['type' => Types::AUTH, 'code' => $code, 'properties' => $properties]);
     }
 
     private function reConnect()

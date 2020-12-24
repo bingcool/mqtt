@@ -22,7 +22,7 @@ use Simps\MQTT\Tools\UnPackTool;
 use Throwable;
 use TypeError;
 
-class Protocol
+class Protocol implements ProtocolInterface
 {
     public static function pack(array $array)
     {
@@ -71,7 +71,7 @@ class Protocol
         } catch (TypeError $e) {
             throw new RuntimeException($e->getMessage(), $e->getCode());
         } catch (Throwable $e) {
-            throw new RuntimeException($e->getMessage(), $e->getCode());
+            throw $e;
         }
 
         return $package;
@@ -122,7 +122,7 @@ class Protocol
         } catch (TypeError $e) {
             throw new RuntimeException($e->getMessage(), $e->getCode());
         } catch (Throwable $e) {
-            throw new RuntimeException($e->getMessage(), $e->getCode());
+            throw $e;
         }
 
         return $package;
