@@ -19,14 +19,12 @@ use Swoole\Coroutine;
 
 class Client
 {
-    /** @var \Swoole\Coroutine\Client */
+    /** @var Coroutine\Client|\Swoole\Client */
     private $client;
 
     private $config = [
         'host' => '127.0.0.1',
         'port' => 1883,
-        'time_out' => 0.5,
-        'select_time_out' => 0.5,
         'user_name' => '',
         'password' => '',
         'client_id' => '',
@@ -46,8 +44,12 @@ class Client
 
     const SYNC_CLIENT_TYPE = 2;
 
-    public function __construct(array $config, array $swConfig = [], int $type = SWOOLE_SOCK_TCP, int $clientType = self::COROUTINE_CLIENT_TYPE)
-    {
+    public function __construct(
+        array $config,
+        array $swConfig = [],
+        int $type = SWOOLE_SOCK_TCP,
+        int $clientType = self::COROUTINE_CLIENT_TYPE
+    ) {
         $this->config = array_replace_recursive($this->config, $config);
         $this->clientType = $clientType;
         if ($this->isCoroutineClientType()) {
@@ -58,7 +60,7 @@ class Client
         if (!empty($swConfig)) {
             $this->client->set($swConfig);
         }
-        if (!$this->client->connect($this->config['host'], $this->config['port'], $this->config['time_out'])) {
+        if (!$this->client->connect($this->config['host'], $this->config['port'])) {
             $this->reConnect();
         }
     }
@@ -109,9 +111,15 @@ class Client
         return $this->send($data);
     }
 
-    public function publish($topic, $message, $qos = 0, $dup = 0, $retain = 0, array $properties = [])
-    {
-        $response = ($qos > 0) ? true : false;
+    public function publish(
+        string $topic,
+        string $message,
+        int $qos = 0,
+        int $dup = 0,
+        int $retain = 0,
+        array $properties = []
+    ) {
+        $response = $qos > 0;
 
         return $this->send(
             [
@@ -133,7 +141,7 @@ class Client
         return $this->send(['type' => Types::PINGREQ]);
     }
 
-    public function close(int $code = ReasonCode::NORMAL_DISCONNECTION, array $properties = [])
+    public function close(int $code = ReasonCode::NORMAL_DISCONNECTION, array $properties = []): bool
     {
         $this->send(['type' => Types::DISCONNECT, 'code' => $code, 'properties' => $properties], false);
 
@@ -156,13 +164,13 @@ class Client
                 sleep(3);
             }
             $this->client->close();
-            $result = $this->client->connect($this->config['host'], $this->config['port'], $this->config['time_out']);
+            $result = $this->client->connect($this->config['host'], $this->config['port']);
             ++$reConnectTime;
         }
         $this->connect((bool) $this->connectData['clean_session'] ?? true, $this->connectData['will'] ?? []);
     }
 
-    public function send(array $data, $response = true)
+    public function send(array $data, bool $response = true)
     {
         if ($this->config['protocol_level'] === 5) {
             $package = ProtocolV5::pack($data);
@@ -209,23 +217,20 @@ class Client
         if ($this->isCoroutineClientType()) {
             $response = $this->client->recv();
         } else {
-            while (true) {
-                $write = $error = [];
-                $read = [$this->client];
-                $n = swoole_client_select($read, $write, $error, $this->config['select_time_out']);
-                if ($n > 0) {
-                    $response = $this->client->recv();
-                } else {
-                    $response = true;
-                }
-                break;
+            $write = $error = [];
+            $read = [$this->client];
+            $n = swoole_client_select($read, $write, $error);
+            if ($n > 0) {
+                $response = $this->client->recv();
+            } else {
+                $response = true;
             }
         }
 
         return $response;
     }
 
-    protected function isCoroutineClientType()
+    protected function isCoroutineClientType(): bool
     {
         if ($this->clientType === self::COROUTINE_CLIENT_TYPE) {
             return true;
@@ -234,7 +239,7 @@ class Client
         return false;
     }
 
-    public function buildMessageId()
+    public function buildMessageId(): int
     {
         return ++$this->messageId;
     }
